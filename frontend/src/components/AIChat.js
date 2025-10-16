@@ -265,9 +265,6 @@ const AIChat = () => {
                 <button className="action-btn" title="Voice input">
                   🎤
                 </button>
-                <button className="action-btn" title="Attach file">
-                  📎
-                </button>
               </div>
               <input
                 type="text"
