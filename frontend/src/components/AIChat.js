@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
 import httpClient from '../httpClient';
 import './AIChat.css';
 
@@ -80,6 +81,16 @@ const AIChat = () => {
     setNewMessage('');
     setLoading(true);
     
+    // Add user message to local state immediately so it's visible
+    const tempUserMessage = {
+      chat_message_id: `temp_${Date.now()}`, // Temporary ID
+      message_text: messageText,
+      message_from_id: user.user_id,
+      message_created_timestamp: new Date().toISOString(),
+      isTemporary: true
+    };
+    setMessages(prevMessages => [...prevMessages, tempUserMessage]);
+    
     try {
       // Process the message with GPT (this handles both saving user message and generating AI response)
       const response = await httpClient.post('/api/chat/message/process', {
@@ -96,6 +107,8 @@ const AIChat = () => {
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      // Remove the temporary message on error
+      setMessages(prevMessages => prevMessages.filter(msg => !msg.isTemporary));
       // Show error message to user
       alert('Failed to send message. Please try again.');
     } finally {
@@ -198,7 +211,13 @@ const AIChat = () => {
                   }`}
                 >
                   <div className="message-content">
-                    <div className="message-text">{message.message_text}</div>
+                    <div className="message-text">
+                      {message.message_from_id === 0 ? (
+                        <ReactMarkdown>{message.message_text}</ReactMarkdown>
+                      ) : (
+                        message.message_text
+                      )}
+                    </div>
                     <div className="message-time">
                       {formatTimestamp(message.message_created_timestamp)}
                     </div>
