@@ -6,13 +6,12 @@ import AIChat from './components/AIChat';
 import './App.css';
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // Check authentication status synchronously on initial render
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return !!localStorage.getItem('user');
+  });
 
   useEffect(() => {
-    // Check authentication status on mount
-    const user = localStorage.getItem('user');
-    setIsLoggedIn(!!user);
-
     // Listen for custom events that indicate login/logout
     const handleAuthChange = () => {
       const user = localStorage.getItem('user');

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import httpClient from '../httpClient';
@@ -13,6 +13,12 @@ const AIChat = () => {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
+  const messagesEndRef = useRef(null);
+
+  // Function to scroll to the bottom of messages
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   useEffect(() => {
     // Get user from localStorage
@@ -22,6 +28,18 @@ const AIChat = () => {
     }
     fetchSessions();
   }, []);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Auto-scroll to bottom when loading state changes (for loading indicator)
+  useEffect(() => {
+    if (loading) {
+      scrollToBottom();
+    }
+  }, [loading]);
 
   const fetchSessions = async () => {
     setSessionsLoading(true);
@@ -236,6 +254,9 @@ const AIChat = () => {
                   </div>
                 </div>
               )}
+              
+              {/* Scroll target element */}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Message Input */}
