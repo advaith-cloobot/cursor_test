@@ -386,12 +386,13 @@ def read_chat_message(chat_message_id):
         return None
 
 
-def read_session_messages(chat_session_id):
+def read_session_messages(chat_session_id, limit=None):
     """
-    Read all messages for a chat session
+    Read messages for a chat session
     
     Args:
         chat_session_id (int): The chat session ID
+        limit (int, optional): Maximum number of messages to return (returns latest messages)
     
     Returns:
         list: List of chat messages
@@ -400,16 +401,32 @@ def read_session_messages(chat_session_id):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("""
-            SELECT * FROM chat_messages 
-            WHERE chat_session_id = ? AND status != ?
-            ORDER BY message_created_timestamp ASC
-        """, (chat_session_id, STATUS_ARCHIVED))
+        if limit:
+            # Get the last N messages
+            cursor.execute("""
+                SELECT * FROM chat_messages 
+                WHERE chat_session_id = ? AND status != ?
+                ORDER BY message_created_timestamp DESC
+                LIMIT ?
+            """, (chat_session_id, STATUS_ARCHIVED, limit))
+        else:
+            # Get all messages
+            cursor.execute("""
+                SELECT * FROM chat_messages 
+                WHERE chat_session_id = ? AND status != ?
+                ORDER BY message_created_timestamp ASC
+            """, (chat_session_id, STATUS_ARCHIVED))
         
         messages = cursor.fetchall()
         conn.close()
         
-        return [dict(message) for message in messages]
+        message_list = [dict(message) for message in messages]
+        
+        # If we used limit, reverse the order to get chronological order
+        if limit:
+            message_list.reverse()
+        
+        return message_list
     except Exception as e:
         print(f"Error reading session messages: {e}")
         return []

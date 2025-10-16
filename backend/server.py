@@ -384,6 +384,76 @@ def send_message():
         }), INTERNAL_SERVER_ERROR
 
 
+@app.route('/api/chat/message/process', methods=['POST'])
+def process_message():
+    """
+    Process a chat message with GPT and get AI response
+    
+    Request body:
+        {
+            "session_id": 1,
+            "message_text": "Hello, how are you?",
+            "user_id": 1
+        }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'session_id' not in data or 'message_text' not in data or 'user_id' not in data:
+            return jsonify({
+                "success": False,
+                "message": "Session ID, message text, and user ID are required"
+            }), BAD_REQUEST
+        
+        session_id = data['session_id']
+        message_text = data['message_text']
+        user_id = data['user_id']
+        
+        # Save the user message first
+        from Monolithic.db_ops.db_ops import insert_chat_message
+        from Monolithic.constants.constants import MESSAGE_FROM_SYSTEM
+        
+        user_message_id = insert_chat_message(
+            chat_session_id=session_id,
+            message_text=message_text,
+            message_from_id=user_id,
+            message_to_id=MESSAGE_FROM_SYSTEM,
+            message_created_user_id=user_id
+        )
+        
+        if not user_message_id:
+            return jsonify({
+                "success": False,
+                "message": "Failed to save user message"
+            }), BAD_REQUEST
+        
+        # Process message with GPT
+        from Components.gpt_tools.gpt_tools import process_message as gpt_process_message
+        gpt_response = gpt_process_message(session_id, message_text)
+        
+        # Save the GPT response as a system message
+        from Monolithic.utils.utils import save_system_response
+        success, result = save_system_response(session_id, gpt_response)
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "data": result,
+                "message": "Message processed successfully"
+            }), CREATED
+        else:
+            return jsonify({
+                "success": False,
+                "message": result
+            }), BAD_REQUEST
+    except Exception as e:
+        print(f"Process message error: {e}")
+        return jsonify({
+            "success": False,
+            "message": "Internal server error"
+        }), INTERNAL_SERVER_ERROR
+
+
 @app.route('/api/chat/history/<int:session_id>', methods=['GET'])
 def get_history(session_id):
     """

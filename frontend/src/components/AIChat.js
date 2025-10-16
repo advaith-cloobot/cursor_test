@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import httpClient from '../httpClient';
 import './AIChat.css';
 
@@ -10,6 +11,7 @@ const AIChat = () => {
   const [loading, setLoading] = useState(false);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [user, setUser] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Get user from localStorage
@@ -74,21 +76,28 @@ const AIChat = () => {
   const sendMessage = async () => {
     if (!newMessage.trim() || !currentSession || !user) return;
     
+    const messageText = newMessage.trim();
+    setNewMessage('');
     setLoading(true);
+    
     try {
-      const response = await httpClient.post('/api/chat/message/send', {
+      // Process the message with GPT (this handles both saving user message and generating AI response)
+      const response = await httpClient.post('/api/chat/message/process', {
         session_id: currentSession.chat_session_id,
-        message_text: newMessage,
+        message_text: messageText,
         user_id: user.user_id
+      }, {
+        timeout: 60000 // 60 second timeout for GPT processing
       });
       
       if (response.data.success) {
-        setNewMessage('');
-        // Refresh messages to show the new ones
-        fetchMessages(currentSession.chat_session_id);
+        // Refresh messages to show both user message and AI response
+        await fetchMessages(currentSession.chat_session_id);
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      // Show error message to user
+      alert('Failed to send message. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -104,6 +113,15 @@ const AIChat = () => {
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const handleLogout = () => {
+    // Clear user data from localStorage
+    localStorage.removeItem('user');
+    // Dispatch custom event to notify App component of auth change
+    window.dispatchEvent(new Event('authChange'));
+    // Navigate to login page
+    navigate('/login');
   };
 
   return (
@@ -159,6 +177,11 @@ const AIChat = () => {
           <span className="plus-icon">+</span>
           New Chat
         </button>
+
+        <button className="logout-btn" onClick={handleLogout}>
+          <span className="logout-icon">🚪</span>
+          Logout
+        </button>
       </div>
 
       {/* Main Chat Area */}
@@ -182,6 +205,18 @@ const AIChat = () => {
                   </div>
                 </div>
               ))}
+              
+              {/* Loading indicator when processing response */}
+              {loading && (
+                <div className="message ai-message loading-message">
+                  <div className="message-content">
+                    <div className="message-text">
+                      <span className="loading-dots">Processing response</span>
+                      <span className="loading-animation">...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Message Input */}

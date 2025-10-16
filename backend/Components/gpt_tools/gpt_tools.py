@@ -6,7 +6,6 @@ This module contains AI/ML tools for processing chat messages
 
 import os
 import openai
-from openai import OpenAIError
 import json
 import ast
 import re
@@ -129,21 +128,29 @@ def get_gpt_response(code,messages,max_tokens=10000):
             # print_statement('ggrf:r1::',tryindex,'::',json.dumps(messages,indent=4), "::",gptl[tryindex])
             
             init_openai_params(gptl[tryindex])
-            response = openai.ChatCompletion.create(
-                        engine=gptl[tryindex],
-                        messages = messages,
-                        temperature=0.7,
-                        max_tokens=max_tokens,
-                        top_p=0.95,
-                        frequency_penalty=0,
-                        presence_penalty=0,
-                        request_timeout=600, 
-                    stop=None)
+            
+            # Use new OpenAI client API for Azure
+            client = openai.AzureOpenAI(
+                api_key=openai.api_key,
+                azure_endpoint=openai.api_base,
+                api_version=openai.api_version
+            )
+            
+            response = client.chat.completions.create(
+                model=gptl[tryindex],
+                messages=messages,
+                temperature=0.7,
+                max_tokens=min(max_tokens, 4096),  # Limit to model's maximum
+                top_p=0.95,
+                frequency_penalty=0,
+                presence_penalty=0,
+                timeout=600
+            )
             
             print_statement('ggrf:r2:',response)
             
-            input_tokens = response["usage"]["prompt_tokens"]
-            output_tokens = response["usage"]["completion_tokens"]
+            input_tokens = response.usage.prompt_tokens
+            output_tokens = response.usage.completion_tokens
             
             for c in response.choices:
                 uc_string = c.message.content
@@ -152,12 +159,14 @@ def get_gpt_response(code,messages,max_tokens=10000):
         
             # print_statement("ggr::",uc_string)
             return True, uc_string, input_tokens, output_tokens, gptl[tryindex]
-        except openai.error.RateLimitError:
-            print_statement(':e1:RateLimitError::',tryindex)
-        except openai.error.Timeout:
-            print_statement(':e2:Timeout::',tryindex)
         except Exception as e:
-            print_statement(':e3:Openai error::',tryindex,'::',e)
+            error_type = type(e).__name__
+            if 'RateLimit' in error_type or 'rate_limit' in str(e).lower():
+                print_statement(':e1:RateLimitError::',tryindex)
+            elif 'Timeout' in error_type or 'timeout' in str(e).lower():
+                print_statement(':e2:Timeout::',tryindex)
+            else:
+                print_statement(':e3:Openai error::',tryindex,'::',e)
 
     return False, "", 0, 0 , ""
 
@@ -222,8 +231,7 @@ def process_gpt_response(gpt_code, messages, jsontype, getmsg=False, max_tokens=
 
 def process_message(session_id, message_text):
     """
-    Process chat message using AI/ML tools
-    This is a placeholder function that will be implemented later
+    Process chat message using AI/ML tools with conversation context
     
     Args:
         session_id (int): The chat session ID
@@ -232,7 +240,54 @@ def process_message(session_id, message_text):
     Returns:
         str: The processed response message
     """
-    # Placeholder implementation
-    # TODO: Implement actual AI/ML processing logic
-    return f"Processed response for: {message_text}"
+    try:
+        # Import here to avoid circular imports
+        from Monolithic.db_ops.db_ops import read_session_messages
+        
+        # Fetch last 11 conversation exchanges for context (we'll exclude the latest one)
+        conversation_history = read_session_messages(session_id, limit=11)
+        
+        # Remove the latest message (current message being processed) from history
+        if conversation_history:
+            conversation_history = conversation_history[:-1]
+        
+        # Build prompt message list with system guidelines
+        prompt_message_list = [
+            {
+                "role": GPT_SYS_ROLE,
+                "content": CHAT_SYSTEM_GUIDELINES,
+            }
+        ]
+        
+        # Add conversation history to provide context
+        for message in conversation_history:
+            if message['message_from_id'] == 0:  # System message
+                prompt_message_list.append({
+                    "role": "assistant",
+                    "content": message['message_text']
+                })
+            else:  # User message
+                prompt_message_list.append({
+                    "role": GPT_USER_ROLE,
+                    "content": message['message_text']
+                })
+        
+        # Add the current user message
+        prompt_message_list.append({
+            "role": GPT_USER_ROLE,
+            "content": message_text,
+        })
+
+        print_statement('Processing message with context:', prompt_message_list)
+
+        # Use a cost-effective default; adjust if needed
+        response_text, in_tok, out_tok, gpt_model = process_gpt_response(
+            GPT_4o_50k, prompt_message_list, JSON_NONE
+        )
+        
+        return response_text
+        
+    except Exception as e:
+        print_statement('Error processing message:', str(e))
+        return f"I apologize, but I encountered an error processing your message. Please try again."
 

@@ -89,6 +89,42 @@ def signup_user(user_name, user_email, user_password):
         return False, "User registration failed"
 
 
+def save_system_response(session_id, response_text):
+    """
+    Save system response to the database
+    
+    Args:
+        session_id (int): The chat session ID
+        response_text (str): The system response text
+    
+    Returns:
+        tuple: (bool, dict/str) - (success status, message data or error message)
+    """
+    try:
+        from Monolithic.db_ops.db_ops import insert_chat_message
+        
+        # Insert system message (message_from_id = 0 for system)
+        message_id = insert_chat_message(
+            chat_session_id=session_id,
+            message_text=response_text,
+            message_from_id=0,  # System message
+            message_to_id=0,  # System to user
+            message_created_user_id=0  # System user
+        )
+        
+        if message_id:
+            return True, {
+                "message_id": message_id,
+                "message_text": response_text,
+                "message_from_id": 0
+            }
+        else:
+            return False, "Failed to save system response"
+    except Exception as e:
+        print(f"Error saving system response: {e}")
+        return False, "Failed to save system response"
+
+
 def create_new_chat_session(user_id, session_name=None, session_description=None):
     """
     Create a new chat session
